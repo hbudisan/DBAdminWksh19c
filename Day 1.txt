@@ -1,0 +1,297 @@
+DBA Training
+- Introduction SQL
+- Administration Workshop 
+- Backup & Recovery
+- Performance Tuning
+- Multitenant Database
+- Oracle Advanced Security
+- Oracle Data Guard
+- Oracle RAC 
+- Oracle Streams
+- ...
+
+Developer Training
+- Introduction SQL
+- Program PL/SQL : Procedure / Function / Package / Trigger
+- Advanced PL/SQL
+- Oracle APEX 
+- Oracle Form / Oracle Report
+- Oracle JDeveloper
+- ...
+
+Certification
+- OCA : Oracle Certified Associate
+- OCP : Oracle Certified Professional
+- OCM : Oracle Certified Master
+
+Arsitektur Oracle Database
+- Struktur Memory
+- Struktur Process
+- Struktur Storage
+
+01. Shared Pool
+	Tujuan : Performance
+	
+	SELECT dept_id, dept_name
+	FROM dept
+	WHERE loc_id = 90;
+
+02. Database Buffer Cache
+	Tujuan : Performance
+	
+	10	IT
+	20	HR
+	30	SALES
+
+03. Redo Log Buffer
+	Tujuan : Recovery
+	
+	DML	: Insert, Update, Delete
+	DDL : Create, Alter, Drop
+	DCL : Commit, Rollback
+
+04. DBWn (Database Writer)
+
+	Database Buffer Cache
+
+	10	IT		   -> MIS 		--> DBWn   --> Datafiles
+	20	HR
+	30	SALES
+	
+	RAM										   Harddisk
+	
+05. Log Writer Process (LGWR)
+
+	Redo Log Buffer		--> LGWR 	--> Redo Log Files
+	(DML + DDL)
+	
+	RAM								    Harddisk
+	
+06. Checkpoint Process (CKPT)
+	- Mandor DBWn
+	- Ngasih Stempel (SCN : Sequence Change Number)
+		- Control Files
+		- Datafiles	
+		
+07. Archiver Processes (ARCn)
+
+	Redo Log Buffer		--> LGWR 	--> Redo Log Files			--> ARCn  --> Archived Log Files
+	(DML + DDL)							- Group 1 -> 2 -> 3		
+	
+	RAM								    Harddisk
+	
+08. Database Storage Architecture
+	- Password file		: SYS
+	- Parameter file	: Settings Oracle Database
+	- Control files		: 
+		- Nama + Lokasi Datafiles 
+		- Nama + Lokasi Redolog Files
+		- SCN
+	- Redo log files	: Perintah yg mengubah database (DML + DDL)
+	- Data files		: Data Perusahaan
+	
+	
+=== Configure Labs Environment ===
+
+01. Install VMWare Workstation Player
+
+02. Extract Image Virtual Machine
+	- VM-Server.zip
+	
+03. Open image dg VMWare Workstation Player
+	- Open : "Oracle Linux 8 64-bit.vmx" 
+	- Startup -> Pilih "I Copied It"
+	- Username : admin	
+	  Password : Welcome1
+	
+=== Install Oracle Database Software ===
+
+01. Versi Oracle Database
+
+	21c
+	19c		--> Versi yg digunakan di training
+	18c
+	12c
+	11g
+	10g
+	9i
+	8i
+	8
+
+02. Edition Oracle Database	
+	
+	Express Edition (XE) : Gratis
+	
+	Berbayar
+	- Standard Edition (SE)
+	- Enterprise Edition (EE)		===> Digunakan di training
+		Options:
+		- RAC
+		- Active Data Guard
+		- Mutitenant
+		- Partitioning
+		- Data Mining
+		- Oracle Advanced Security
+		- ...
+	
+03. Download Oracle Software
+	- www.oracle.com
+	
+04. Install prerequisite Oracle Database 19c
+
+	$ su -
+	# dnf install oracle-database-preinstall-19c
+	
+		...
+		Installed:
+		  oracle-database-preinstall-19c-1.0-2.el8.x86_64 ksh-20120801-257.0.1.el8.x86_64          libXxf86dga-1.1.5-1.el8.x86_64                        
+		  libdmx-1.1.4-3.el8.x86_64                       libstdc++-devel-8.2.1-3.5.0.1.el8.x86_64 sysstat-11.7.3-9.0.1.el8.x86_64                       
+		  xorg-x11-utils-7.5-28.el8.x86_64                glibc-devel-2.28-42.0.1.el8.x86_64       libaio-devel-0.3.112-1.el8.x86_64                     
+		  libnsl-2.28-42.0.1.el8.x86_64                   libxcrypt-devel-4.1.1-4.el8.x86_64       lm_sensors-libs-3.4.0-23.20180522git70f7e08.el8.x86_64
+		  make-1:4.2.1-11.el8.x86_64                     
+
+		Complete!
+	
+05. Ganti password user oracle
+
+	# passwd oracle		-> Welcome1
+		...
+		passwd: all authentication tokens updated successfully.
+	
+	- Logout sebagai user admin
+	- Relogin sebagai user oracle
+	
+06. Install MobaXterm
+	- Login sebagi user oracle
+	
+	$ ifconfig
+	
+		ens192: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+				inet 192.168.182.139  netmask 255.255.255.0  broadcast 192.168.182.255
+	
+	- Buat SSH session
+	- Remote Host : 192.168.182.139
+	  User		  : oracle
+	
+07. Buat directory untuk Oracle Database
+	
+	$ su -
+	# mkdir -p /u01/app/oracle/product/19.0.0/dbhome_1
+	# chown -R oracle:oinstall /u01
+	# chmod -R 755 /u01
+	# exit
+	
+08. Configure .bash_profile
+
+	$ cd ~
+	$ pwd
+		/home/oracle
+	$ ls
+	$ ls -a
+	$ more .bash_profile
+	$ nano .bash_profile
+	
+		# Oracle Settings
+		export TMP=/tmp
+		export TMPDIR=$TMP
+
+		export ORACLE_HOSTNAME=vmserver.com
+		export ORACLE_BASE=/u01/app/oracle
+		export ORACLE_HOME=$ORACLE_BASE/product/19.0.0/dbhome_1
+		export ORA_INVENTORY=/u01/app/oraInventory
+		export ORACLE_SID=prod
+
+		export PATH=/usr/sbin:/usr/local/bin:$PATH
+		export PATH=$ORACLE_HOME/bin:$PATH
+
+		export LD_LIBRARY_PATH=$ORACLE_HOME/lib:/lib:/usr/lib
+		export CLASSPATH=$ORACLE_HOME/jlib:$ORACLE_HOME/rdbms/jlib
+
+09. Test Env. Variable
+	- Relogin sebagai user oracle
+	
+	$ echo $ORACLE_HOSTNAME
+		vmserver.com
+		
+	$ echo $ORACLE_HOME
+		/u01/app/oracle/product/19.0.0/dbhome_1
+	
+10. Copy installer Oracle DB Software ke /home/oracle
+	- LINUX.X64_193000_db_home.zip
+	
+11. Extract LINUX.X64_193000_db_home.zip
+
+	$ cd $ORACLE_HOME
+	$ pwd
+		/u01/app/oracle/product/19.0.0/dbhome_1
+	$ unzip -oq /home/oracle/LINUX.X64_193000_db_home.zip
+	$ ls
+		addnode     cv           drdaas         javavm
+		...
+		
+12. Install Oracle Database Software
+	- Lakukan di VM
+	
+	$ cd $ORACLE_HOME
+	$ export CV_ASSUME_DISTID=OEL7.6
+	$ ./runInstaller
+	
+	- Set Up Software Only
+	- Single Instance...
+	- Enterprise Edition
+	- Oracle Base 			: /u01/app/oracle
+	  Inventory Directory 	: /u01/app/oraInventory
+	  
+13. Eksekusi sebagai user root
+	
+	$ su -
+	# /u01/app/oraInventory/orainstRoot.sh
+	# /u01/app/oracle/product/19.0.0/dbhome_1/root.sh
+
+
+=== Create Oracle Database using DBCA ===
+
+01. Buka DBCA
+
+	$ dbca
+	
+02. Langkah demi langkah:
+	- Create a database
+	- Advanced Configuration
+	- Database Type	: Oracle Single instance Database
+	  Template Name : General Purpose
+	- Global database name  : prod
+	  SID					: prod
+
+	  Disable "Create as container database"
+
+	- Create "a new Listener"
+		Listener Name : LISTENER
+		Port		  : 1521
+
+	- Use ASMM
+		SGA : 1000 MB
+		PGA :  250 MB
+	  
+	  Process : 150
+	  Check "Sample Schema"
+	  Check "Oracle EM Express"
+	   Port : 5500
+	   
+	  Password user SYS + SYSTEM : Welcome1
+
+03. Screenshot hasil create database
+	
+04. Ganti password user HR -> Welcome1
+
+	$ sqlplus hr/Welcome1
+	
+		Connected to:
+		Oracle Database 19c Enterprise Edition Release 19.0.0.0.0 - Production
+		Version 19.3.0.0.0
+
+		SQL>
+ 
+
+
+

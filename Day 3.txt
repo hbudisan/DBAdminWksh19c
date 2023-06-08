@@ -1,0 +1,578 @@
+=== Startup Oracle DB + Listener ===
+
+01. Startup DB
+
+	$ sqlplus sys/Welcome1 as sysdba
+	
+		Connected to an idle instance.
+		
+	SQL> startup;
+	
+		ORACLE instance started.
+
+		Total System Global Area 1048575776 bytes
+		Fixed Size                  8904480 bytes
+		Variable Size             268435456 bytes
+		Database Buffers          763363328 bytes
+		Redo Buffers                7872512 bytes
+		Database mounted.
+		Database opened.
+	
+	SQL> exit;
+	
+02. Startup Listener
+
+	$ lsnrctl start
+	$ lsnrctl start LISTENER2
+
+
+=== Easy Connect Naming ===
+
+01. Lakukan di VM Client
+
+	$ sqlplus hr/Welcome1@vmserver.com:1521/prod
+	SQL> show user;
+	SQL> select * from regions;
+
+		 REGION_ID REGION_NAME
+		---------- -------------------------
+				 1 Europe
+				 2 Americas
+				 3 Asia
+				 4 Middle East and Africa
+	
+	SQL> exit
+	
+	$ sqlplus hr/Welcome1@192.11.12.20:1522/prod
+	SQL> connect hr/Welcome1@192.11.12.20:1523/prod ==> ERROR
+	SQL> show user;
+		USER is ""
+	SQL> connect hr/Welcome1@192.11.12.20:1521/prod
+	SQL> show user;
+		USER is "HR"
+	SQL> exit
+	
+	-- Login sebagai user SYS
+	$ sqlplus /@192.11.12.20:1522/prod as sysdba ==> ERROR
+	$ sqlplus sys/Welcome1@192.11.12.20:1522/prod as sysdba
+	SQL> show user
+		USER is "SYS"
+
+=== Local Naming ===
+
+01. Create file tnsnames.ora
+	- lakukan di VM-Client
+
+	$ netmgr
+	
+	Net Service Name 	: prod1
+	Protocol			: TCP/IP
+	Hostname			: 192.11.12.20
+	Port				: 1521
+	Service Name		: prod
+	Connetion Type		: Dedicated / Default
+
+02. Check file yg terbentuk
+
+	$ cd $ORACLE_HOME/network/admin
+	$ ls
+		listener.ora  samples  shrept.lst  sqlnet.ora  tnsnames.ora
+	$ cat tnsnames.ora
+
+		PROD1 =
+		  (DESCRIPTION =
+			(ADDRESS_LIST =
+			  (ADDRESS = (PROTOCOL = TCP)(HOST = 192.11.12.20)(PORT = 1521))
+			)
+			(CONNECT_DATA =
+			  (SERVICE_NAME = prod)
+			)
+		  )
+
+03. Create local naming yg menggunakan LISTENER2
+
+	Net Service Name 	: prod2
+	Protocol			: TCP/IP
+	Hostname			: 192.11.12.20
+	Port				: 1522
+	Service Name		: prod
+	Connetion Type		: Dedicated / Default
+	
+	$ netca
+	
+	$ cd $ORACLE_HOME/network/admin
+	$ cat tnsnames.ora	
+
+		PROD2 =
+		  (DESCRIPTION =
+			(ADDRESS_LIST =
+			  (ADDRESS = (PROTOCOL = TCP)(HOST = 192.11.12.20)(PORT = 1522))
+			)
+			(CONNECT_DATA =
+			  (SERVICE_NAME = prod)
+			)
+		  )
+
+		PROD1 =
+		  (DESCRIPTION =
+			(ADDRESS_LIST =
+			  (ADDRESS = (PROTOCOL = TCP)(HOST = 192.11.12.20)(PORT = 1521))
+			)
+			(CONNECT_DATA =
+			  (SERVICE_NAME = prod)
+			)
+		  )
+		  
+04. Test 
+
+	$ sqlplus hr/Welcome1@prod1
+	SQL> select * from regions;
+
+		 REGION_ID REGION_NAME
+		---------- -------------------------
+				 1 Europe
+				 2 Americas
+				 3 Asia
+				 4 Middle East and Africa
+
+	SQL> connect system/Welcome1@prod2
+	SQL> select * from hr.regions;
+
+		 REGION_ID REGION_NAME
+		---------- -------------------------
+				 1 Europe
+				 2 Americas
+				 3 Asia
+				 4 Middle East and Africa
+
+	SQL> connect sys/Welcome1@prod2 as sysdba
+	SQL> show user
+		USER is "SYS"
+
+05. Testing Oracle Net Connectivity
+
+	$ tnsping 192.11.12.20:1521/prod
+		Used EZCONNECT adapter to resolve the alias
+		Attempting to contact (DESCRIPTION=(CONNECT_DATA=(SERVICE_NAME=prod))(ADDRESS=(PROTOCOL=tcp)(HOST=192.11.12.20)(PORT=1521)))
+		OK (30 msec)
+	
+	$ tnsping vmserver.com:1522/prod
+	$ tnsping vmserver.com:1523/prod ==> ERROR
+		TNS-12541: TNS:no listener
+		
+	$ tnsping prod1
+	$ tnsping prod2
+	$ tnsping prod3 ==> ERROR
+	
+=== Managing Database Storage Structures ===
+
+01. Struktur Database Storage
+
+	Database -< Tablespace -< Segments -< Extent -< Oracle Data block
+                |
+				^
+			Datafiles
+
+02. SQL Developer : Exploring the Storage Structures
+
+	$ sqldeveloper
+	
+	View -> DBA
+		Storage -> Tablespace
+
+03. SQL Plus : Exploring the Storage Structures
+
+	$ sqlplus / as sysdba
+	SQL> desc v$tablespace;
+		 Name                                      Null?    Type
+		 ----------------------------------------- -------- ----------------------------
+		 TS#                                                NUMBER
+		 NAME                                               VARCHAR2(30)
+		 INCLUDED_IN_DATABASE_BACKUP                        VARCHAR2(3)
+		 BIGFILE                                            VARCHAR2(3)
+		 FLASHBACK_ON                                       VARCHAR2(3)
+		 ENCRYPT_IN_BACKUP                                  VARCHAR2(3)
+		 CON_ID                                             NUMBER
+	
+	SQL> select name from v$tablespace;
+
+		NAME
+		------------------------------
+		SYSAUX
+		SYSTEM
+		UNDOTBS1
+		USERS
+		TEMP
+
+	SQL> desc dba_data_files;
+	
+		 Name                                      Null?    Type
+		 ----------------------------------------- -------- ----------------------------
+		 FILE_NAME                                          VARCHAR2(513)
+		 FILE_ID                                            NUMBER
+		 TABLESPACE_NAME                                    VARCHAR2(30)
+		 BYTES                                              NUMBER
+		 BLOCKS                                             NUMBER
+		 STATUS                                             VARCHAR2(9)
+		 RELATIVE_FNO                                       NUMBER
+		 AUTOEXTENSIBLE                                     VARCHAR2(3)
+		 MAXBYTES                                           NUMBER
+		 MAXBLOCKS                                          NUMBER
+		 INCREMENT_BY                                       NUMBER
+		 USER_BYTES                                         NUMBER
+		 USER_BLOCKS                                        NUMBER
+		 ONLINE_STATUS                                      VARCHAR2(7)
+		 LOST_WRITE_PROTECT                                 VARCHAR2(7)
+	
+	SQL> column TABLESPACE_NAME format a20
+	SQL> column FILE_NAME format a50
+	SQL> select TABLESPACE_NAME, FILE_NAME
+		 from dba_data_files;
+
+		TABLESPACE_NAME      FILE_NAME
+		-------------------- --------------------------------------------------
+		USERS                /u01/app/oracle/oradata/PROD/users01.dbf
+		UNDOTBS1             /u01/app/oracle/oradata/PROD/undotbs01.dbf
+		SYSTEM               /u01/app/oracle/oradata/PROD/system01.dbf
+		SYSAUX               /u01/app/oracle/oradata/PROD/sysaux01.dbf
+	
+04. SQL Plus - Creating a New Tablespace
+
+	Name 		: Accounting
+	Datafile 	: /u01/app/oracle/oradata/PROD/accounting01.dbf
+	Size		: 10 MB
+	Auto Extend	: 1 MB
+	MaxSize     : 1 GB
+	
+	$ sqlplus / as sysdba
+	SQL> create tablespace Accounting
+         datafile '/u01/app/oracle/oradata/PROD/accounting01.dbf' 
+         size 10M autoextend on next 1M maxsize 1G;
+
+	SQL> select TABLESPACE_NAME, FILE_NAME
+		 from dba_data_files;
+		 
+		TABLESPACE_NAME      FILE_NAME
+		-------------------- --------------------------------------------------
+		USERS                /u01/app/oracle/oradata/PROD/users01.dbf
+		UNDOTBS1             /u01/app/oracle/oradata/PROD/undotbs01.dbf
+		SYSTEM               /u01/app/oracle/oradata/PROD/system01.dbf
+		SYSAUX               /u01/app/oracle/oradata/PROD/sysaux01.dbf
+		ACCOUNTING           /u01/app/oracle/oradata/PROD/accounting01.dbf
+		 
+	SQL> !ls -l -h /u01/app/oracle/oradata/PROD/
+	
+		total 2.5G
+		-rw-r----- 1 oracle oinstall  11M Jun  7 11:21 accounting01.dbf
+		-rw-r----- 1 oracle oinstall  11M Jun  7 11:23 control01.ctl
+		...
+		
+05. SQL Developer - Creating a New Tablespace
+
+	Name 		: Inventory
+	Datafile 	: /u01/app/oracle/oradata/PROD/inventory01.dbf
+	Size		: 20 MB
+	Auto Extend	: 2 MB
+	MaxSize     : 2 GB	
+	
+	CREATE TABLESPACE INVENTORY 
+    DATAFILE 
+        '/u01/app/oracle/oradata/PROD/INVENTORY01.DBF' 
+		SIZE 20971520 AUTOEXTEND ON NEXT 2097152 
+		MAXSIZE 2147483648;
+
+06. SQL Plus - Altering Tablespace
+
+	$ sqlplus / as sysdba
+	
+	-- Add new datafile
+	SQL> alter tablespace accounting
+         add datafile '/u01/app/oracle/oradata/PROD/accounting02.dbf' 
+         size 15M; 	
+	
+	SQL> !ls -l -h /u01/app/oracle/oradata/PROD/
+
+		-rw-r----- 1 oracle oinstall  11M Jun  7 11:21 accounting01.dbf
+		-rw-r----- 1 oracle oinstall  16M Jun  7 11:50 accounting02.dbf
+	
+	-- Resize datafile	 
+	SQL> alter database
+	     datafile '/u01/app/oracle/oradata/PROD/accounting02.dbf' 
+		 resize 50M; 	
+		 
+	SQL> !ls -l -h /u01/app/oracle/oradata/PROD/	
+	
+		-rw-r----- 1 oracle oinstall  11M Jun  7 11:21 accounting01.dbf
+		-rw-r----- 1 oracle oinstall  51M Jun  7 11:54 accounting02.dbf
+
+07. Dropping Tablespaces
+
+	$ sqlplus / as sysdba
+	SQL> create tablespace Sales
+         datafile '/u01/app/oracle/oradata/PROD/sales01.dbf' 
+         size 10M;
+
+	SQL> select TABLESPACE_NAME, FILE_NAME
+		 from dba_data_files
+		 where TABLESPACE_NAME = 'SALES';
+
+		TABLESPACE_NAME      FILE_NAME
+		-------------------- --------------------------------------------------
+		SALES                /u01/app/oracle/oradata/PROD/sales01.dbf
+
+	SQL> drop tablespace sales including contents 
+		 and datafiles cascade constraints;
+
+	SQL> select TABLESPACE_NAME, FILE_NAME
+		 from dba_data_files
+		 where TABLESPACE_NAME = 'SALES';
+
+08. Oracle Managed Files (OMF)
+
+	SQL> show parameter DB_CREATE_FILE_DEST
+		NAME                                 TYPE        VALUE
+		------------------------------------ ----------- ------------------------------
+		db_create_file_dest                  string
+	
+	SQL> ALTER SYSTEM 
+         SET DB_CREATE_FILE_DEST='/u01/app/oracle/oradata'; 
+	SQL> show parameter DB_CREATE_FILE_DEST	
+		NAME                                 TYPE        VALUE
+		------------------------------------ ----------- ------------------------------
+		db_create_file_dest                  string      /u01/app/oracle/oradata
+	
+    SQL> CREATE TABLESPACE tbs_1;
+	
+	SQL> select TABLESPACE_NAME, FILE_NAME
+		 from dba_data_files
+		 where TABLESPACE_NAME = 'TBS_1';	
+
+		TABLESPACE_NAME      FILE_NAME
+		-------------------- --------------------------------------------------
+		TBS_1                /u01/app/oracle/oradata/PROD/datafile/o1_mf_tbs_1_
+							 l808y60y_.dbf
+
+	SQL> drop tablespace tbs_1 including contents 
+		 and datafiles cascade constraints;
+
+=== Administering User Security ===
+
+01. SQL Developer : Exploring User Security
+
+	$ sqldeveloper
+	
+	View -> DBA
+		Security -> Users
+
+02. SQL Plus : Exploring User Security
+
+	$ sqlplus / as sysdba
+	SQL> desc dba_users;
+		 Name                                      Null?    Type
+		 ----------------------------------------- -------- ----------------------------
+		 USERNAME                                  NOT NULL VARCHAR2(128)
+		 USER_ID                                   NOT NULL NUMBER
+		 PASSWORD                                           VARCHAR2(4000)
+		 ACCOUNT_STATUS                            NOT NULL VARCHAR2(32)
+		 LOCK_DATE                                          DATE
+		 EXPIRY_DATE                                        DATE
+		 DEFAULT_TABLESPACE                        NOT NULL VARCHAR2(30)
+		 TEMPORARY_TABLESPACE                      NOT NULL VARCHAR2(30)
+		 LOCAL_TEMP_TABLESPACE                              VARCHAR2(30)
+		 CREATED                                   NOT NULL DATE
+		 PROFILE                                   NOT NULL VARCHAR2(128)
+		 INITIAL_RSRC_CONSUMER_GROUP                        VARCHAR2(128)
+		 EXTERNAL_NAME                                      VARCHAR2(4000)
+		 PASSWORD_VERSIONS                                  VARCHAR2(17)
+		 EDITIONS_ENABLED                                   VARCHAR2(1)
+		 AUTHENTICATION_TYPE                                VARCHAR2(8)
+		 PROXY_ONLY_CONNECT                                 VARCHAR2(1)
+		 COMMON                                             VARCHAR2(3)
+		 LAST_LOGIN                                         TIMESTAMP(9) WITH TIME ZONE
+		 ORACLE_MAINTAINED                                  VARCHAR2(1)
+		 INHERITED                                          VARCHAR2(3)
+		 DEFAULT_COLLATION                                  VARCHAR2(100)
+		 IMPLICIT                                           VARCHAR2(3)
+		 ALL_SHARD                                          VARCHAR2(3)
+		 PASSWORD_CHANGE_DATE                               DATE
+	
+	SQL> column USERNAME format a20
+	SQL> column ACCOUNT_STATUS format a20
+	SQL> column PASSWORD format a10
+	SQL> select USERNAME, ACCOUNT_STATUS, PASSWORD
+	     from dba_users
+		 order by ACCOUNT_STATUS;
+
+		USERNAME             ACCOUNT_STATUS       PASSWORD
+		-------------------- -------------------- ----------
+		XS$NULL              EXPIRED & LOCKED
+		ANONYMOUS            EXPIRED & LOCKED
+		CTXSYS               EXPIRED & LOCKED
+		LBACSYS              LOCKED
+		OJVMSYS              LOCKED
+		...
+		
+03. SQL Plus : Create User
+
+	$ sqlplus / as sysdba
+	SQL> create user inv01
+         identified by Welcome1
+         default tablespace inventory
+		 temporary tablespace temp;
+		 
+	SQL> select USERNAME, ACCOUNT_STATUS, DEFAULT_TABLESPACE
+	     from dba_users
+		 where USERNAME = 'INV01';		 
+
+		USERNAME             ACCOUNT_STATUS       DEFAULT_TABLESPACE
+		-------------------- -------------------- ------------------------------
+		INV01                OPEN                 INVENTORY
+
+04. Test
+
+	$ sqlplus inv01/Welcome1 
+		ORA-01045: user INV01 lacks CREATE SESSION privilege; logon denied
+
+05. Memberikan system privilege
+
+	$ sqlplus / as sysdba
+	SQL> grant create session to inv01;
+	SQL> grant create table to inv01;
+	SQL> alter user inv01 quota 5M on inventory;
+
+	-- Jika ingin unlimited tablespace
+	SQL> GRANT UNLIMITED TABLESPACE TO inv01;
+	
+06. Test Lagi
+
+	$ sqlplus inv01/Welcome1	
+	SQL> create table dept(
+		   deptno number(3) primary key,
+		   dname varchar2(25)
+		 );
+	SQL> insert into dept values(10,'IT');
+	SQL> select * from dept;
+
+			DEPTNO DNAME
+		---------- -------------------------
+				10 IT
+
+07. Mencabut System Privilege
+
+	$ sqlplus / as sysdba
+	SQL> revoke create table from inv01;
+	
+08. Test
+
+	$ sqlplus inv01/Welcome1	
+	SQL> create table emp(
+		   empno number(3) primary key,
+		   ename varchar2(25)
+		 );	
+
+		ORA-01031: insufficient privileges
+		
+	SQL> insert into dept values(20,'HR');
+	SQL> select * from dept;
+	
+			DEPTNO DNAME
+		---------- -------------------------
+				10 IT
+				20 HR
+	
+09. Memberikan Object Privilege
+
+	$ sqlplus hr/Welcome1	
+	SQL> grant select on regions to inv01;
+	SQL> grant update on regions to inv01;
+	SQL> grant insert, delete on regions to inv01;
+
+10. Mengakses object kepunyaan user lain
+
+	$ sqlplus inv01/Welcome1	
+	SQL> select * from hr.regions;
+
+		 REGION_ID REGION_NAME
+		---------- -------------------------
+				 1 Europe
+				 2 Americas
+				 3 Asia
+				 4 Middle East and Africa
+
+	SQL> update hr.regions
+	      set REGION_NAME = 'DKI'
+		  where REGION_ID = 4;
+	
+	SQL> select * from hr.regions;
+
+	 REGION_ID REGION_NAME
+	---------- -------------------------
+			 1 Europe
+			 2 Americas
+			 3 Asia
+			 4 DKI
+
+	SQL> insert into hr.regions values (5,'Bintaro');
+	SQL> delete from hr.regions
+	     where REGION_ID = 5;
+		 
+11. Mencabut Privilege
+
+	$ sqlplus hr/Welcome1	
+	SQL> revoke update, delete on hr.regions from inv01;
+
+12. Test
+
+	$ sqlplus inv01/Welcome1	
+	SQL> select * from hr.regions;
+	SQL> update hr.regions
+	      set REGION_NAME = 'BDG'
+		  where REGION_ID = 4;
+
+		ORA-01031: insufficient privileges
+
+13. SQL Developer : Membuat User + Grant Privilege
+
+	username 			: inv02
+	password			: Welcome1
+	default tablespace 	: inventory (Quota 10M)
+	temp tablespace		: temp
+	
+	System Privilege:
+	- Create session
+	- Create Table
+	- Create View
+	- Create Procedure
+	
+	Object Privilege
+	- CR   : hr.regions
+	- CRUD : hr.employees
+
+	-- USER SQL
+	CREATE USER "inv02" IDENTIFIED BY "Welcome1"  
+	DEFAULT TABLESPACE "INVENTORY"
+	TEMPORARY TABLESPACE "TEMP";
+
+	-- QUOTAS
+	ALTER USER "inv02" QUOTA 5M ON "INVENTORY";
+
+	-- ROLES
+
+	-- SYSTEM PRIVILEGES
+	GRANT CREATE VIEW TO "inv02" ;
+	GRANT CREATE SESSION TO "inv02" ;
+	GRANT CREATE TABLE TO "inv02" ;
+	GRANT CREATE PROCEDURE TO "inv02" ;
+
+	grant SELECT, INSERT on "HR"."COUNTRIES" to "inv02" ;
+	grant INSERT, UPDATE, SELECT, DELETE on "HR"."EMPLOYEES" to "inv02" ;
+
+
+
+
+
+
+
+
+
+		 
