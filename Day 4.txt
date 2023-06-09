@@ -1,0 +1,533 @@
+=== Startup Oracle DB + Listener ===
+
+01. Startup DB
+
+	$ sqlplus sys/Welcome1 as sysdba
+	
+		Connected to an idle instance.
+		
+	SQL> startup;
+	
+		ORACLE instance started.
+
+		Total System Global Area 1048575776 bytes
+		Fixed Size                  8904480 bytes
+		Variable Size             268435456 bytes
+		Database Buffers          763363328 bytes
+		Redo Buffers                7872512 bytes
+		Database mounted.
+		Database opened.
+	
+	SQL> exit;
+	
+02. Startup Listener
+
+	$ lsnrctl start
+	
+	
+=== Role ===
+
+01. Melihat predefined Role	=> SQL Developer
+
+	$ sqldeveloper
+	
+	View -> DBA
+		Security -> Role
+		
+02. Membuat Role -> SQL Plus
+
+	$ sqlplus / as sysdba
+	SQL> create role inv_role;
+	
+	-- Isi role dg system privilege
+	SQL> grant create table to inv_role;
+	SQL> grant create view to inv_role;
+	
+	-- Isi role dg object privilege
+	SQL> grant select, insert, update on hr.regions to inv_role;
+	SQL> grant select on hr.employees to inv_role;
+	
+	-- Isi role dg role
+	SQL> grant connect to inv_role;
+
+03. Assign Role ke User
+
+	SQL> create user inv03
+	     identified by Welcome1
+		 default tablespace inventory
+		 temporary tablespace temp;
+		 
+	SQL> grant inv_role to inv03;
+	SQL> grant unlimited tablespace to inv03;
+
+04. Test
+
+	$ sqlplus inv03/Welcome1
+	SQL> select * from hr.regions;
+	SQL> select employee_id, first_name, salary
+	     from hr.employees
+		 where department_id = 30
+		 order by salary DESC;
+		 
+	SQL> create table emp30 as
+			 select employee_id, first_name, salary
+			 from hr.employees
+			 where department_id = 30
+			 order by salary DESC;	
+
+	SQL> select * from emp30;
+	
+		EMPLOYEE_ID FIRST_NAME               SALARY
+		----------- -------------------- ----------
+				114 Den                       11000
+				115 Alexander                  3100
+				116 Shelli                     2900
+				117 Sigal                      2800
+				118 Guy                        2600
+				119 Karen                      2500
+
+		6 rows selected.
+	
+=== Profiles ===
+
+01. Melihat profiles -> SQL Developer
+
+	$ sqldeveloper
+	
+	View -> DBA
+		Security -> Profile
+		
+02. Melihat profiles -> SQL Plus
+
+	SQL> dba_profiles
+		 Name                                      Null?    Type
+		 ----------------------------------------- -------- ----------------------------
+		 PROFILE                                   NOT NULL VARCHAR2(128)
+		 RESOURCE_NAME                             NOT NULL VARCHAR2(32)
+		 RESOURCE_TYPE                                      VARCHAR2(8)
+		 LIMIT                                              VARCHAR2(128)
+		 COMMON                                             VARCHAR2(3)
+		 INHERITED                                          VARCHAR2(3)
+		 IMPLICIT                                           VARCHAR2(3)
+
+	SQL> column profile format a10
+	SQL> column resource_name format a25
+	SQL> column limit format a12
+	SQL> select profile, resource_name, resource_type, limit
+		 from dba_profiles
+		 where profile = 'DEFAULT'
+		 order by resource_type, limit;
+
+		PROFILE    RESOURCE_NAME             RESOURCE LIMIT
+		---------- ------------------------- -------- ------------
+		DEFAULT    COMPOSITE_LIMIT           KERNEL   UNLIMITED
+		DEFAULT    SESSIONS_PER_USER         KERNEL   UNLIMITED
+		DEFAULT    PRIVATE_SGA               KERNEL   UNLIMITED
+		DEFAULT    CONNECT_TIME              KERNEL   UNLIMITED
+		DEFAULT    IDLE_TIME                 KERNEL   UNLIMITED
+		DEFAULT    LOGICAL_READS_PER_CALL    KERNEL   UNLIMITED
+		DEFAULT    LOGICAL_READS_PER_SESSION KERNEL   UNLIMITED
+		DEFAULT    CPU_PER_CALL              KERNEL   UNLIMITED
+		DEFAULT    CPU_PER_SESSION           KERNEL   UNLIMITED
+		DEFAULT    PASSWORD_LOCK_TIME        PASSWORD 1
+		DEFAULT    FAILED_LOGIN_ATTEMPTS     PASSWORD 10
+		DEFAULT    PASSWORD_LIFE_TIME        PASSWORD 180
+		DEFAULT    PASSWORD_GRACE_TIME       PASSWORD 7
+		DEFAULT    PASSWORD_VERIFY_FUNCTION  PASSWORD NULL
+		DEFAULT    PASSWORD_REUSE_MAX        PASSWORD UNLIMITED
+		DEFAULT    PASSWORD_REUSE_TIME       PASSWORD UNLIMITED
+		DEFAULT    INACTIVE_ACCOUNT_TIME     PASSWORD UNLIMITED
+
+		17 rows selected.
+
+03. Membuat Profile --> SQL Plus
+
+	
+	$ sqlplus / as sysdba
+	SQL> create profile inv_profile limit
+			FAILED_LOGIN_ATTEMPTS 3
+			PASSWORD_LOCK_TIME 3
+			PASSWORD_LIFE_TIME 30
+			PASSWORD_GRACE_TIME 3
+			PASSWORD_REUSE_TIME 60;
+
+	SQL> column profile format a15
+	SQL> select profile, resource_name, resource_type, limit
+		 from dba_profiles
+		 where profile = 'INV_PROFILE'
+		 order by resource_type, limit;
+
+		PROFILE         RESOURCE_NAME             RESOURCE LIMIT
+		--------------- ------------------------- -------- ------------
+		INV_PROFILE     COMPOSITE_LIMIT           KERNEL   DEFAULT
+		INV_PROFILE     SESSIONS_PER_USER         KERNEL   DEFAULT
+		INV_PROFILE     PRIVATE_SGA               KERNEL   DEFAULT
+		INV_PROFILE     CONNECT_TIME              KERNEL   DEFAULT
+		INV_PROFILE     IDLE_TIME                 KERNEL   DEFAULT
+		INV_PROFILE     LOGICAL_READS_PER_CALL    KERNEL   DEFAULT
+		INV_PROFILE     LOGICAL_READS_PER_SESSION KERNEL   DEFAULT
+		INV_PROFILE     CPU_PER_CALL              KERNEL   DEFAULT
+		INV_PROFILE     CPU_PER_SESSION           KERNEL   DEFAULT
+		INV_PROFILE     PASSWORD_GRACE_TIME       PASSWORD 3
+		INV_PROFILE     PASSWORD_LOCK_TIME        PASSWORD 3
+		INV_PROFILE     FAILED_LOGIN_ATTEMPTS     PASSWORD 3
+		INV_PROFILE     PASSWORD_LIFE_TIME        PASSWORD 30
+		INV_PROFILE     PASSWORD_REUSE_TIME       PASSWORD 60
+		INV_PROFILE     PASSWORD_VERIFY_FUNCTION  PASSWORD DEFAULT
+		INV_PROFILE     PASSWORD_REUSE_MAX        PASSWORD DEFAULT
+		INV_PROFILE     INACTIVE_ACCOUNT_TIME     PASSWORD DEFAULT
+
+04. Assign Profile to user
+
+	$ sqlplus / as sysdba
+	SQL> alter user inv03 profile inv_profile;
+	
+	SQL> column username format a15
+	SQL> select username, profile
+		 from dba_users
+		 where upper(username) like 'INV%';
+
+		USERNAME        PROFILE
+		--------------- ---------------
+		INV01           DEFAULT
+		inv02           DEFAULT
+		INV03           INV_PROFILE
+
+05. Test
+
+	$ sqlplus inv03/salah1
+	$ sqlplus inv03/salah2
+	$ sqlplus inv03/salah3
+	$ sqlplus inv03/Welcome1
+
+		ERROR:
+		ORA-28000: The account is locked.
+
+	$ sqlplus / as sysdba
+	SQL> alter user inv03 account unlock;
+	SQL> exit
+	
+	$ sqlplus inv03/Welcome1
+	SQL> 
+
+06. Change Password
+
+	$ sqlplus inv03/Welcome1
+	SQL> alter user inv03 identified by abc;	
+	SQL> exit;
+	
+	$ sqlplus inv03/abc
+	SQL> 
+
+07. Complexity Function List
+
+	$ sqlplus / as sysdba
+	SQL> select distinct name
+         from dba_source
+		 where name like '%VERIFY%';
+
+		NAME
+		--------------------------------------------------------------------------------
+		DBMS_DBVERIFY
+		VERIFY_FUNCTION
+		ORA12C_STIG_VERIFY_FUNCTION
+		VERIFY_FUNCTION_11G
+		ORA12C_STRONG_VERIFY_FUNCTION
+		ORA12C_VERIFY_FUNCTION
+
+		6 rows selected.
+
+08. Modifikasi profile
+
+	$ sqlplus / as sysdba
+	SQL> alter profile inv_profile limit
+			PASSWORD_VERIFY_FUNCTION ORA12C_VERIFY_FUNCTION;
+
+09. Test
+
+	$ sqlplus inv03/abc
+	SQL> alter user inv03 identified by xyz;
+
+		ORA-28221: REPLACE not specified
+		
+	SQL> alter user inv03 identified by xyz replace abc;
+
+		ORA-20000: password length less than 8 bytes
+
+	SQL> alter user inv03 identified by cihampelas replace abc;
+
+		ORA-20000: password must contain 1 or more digits
+
+	SQL> alter user inv03 identified by cihampelas9 replace abc;
+
+		ORA-20000: password must contain 1 or more special characters
+
+	SQL> alter user inv03 identified by cihampelas9! replace abc;
+	
+		ORA-00922: missing or invalid option
+		
+	SQL> alter user inv03 identified by "cihampelas9!" replace abc;
+	
+		User altered.
+
+	SQL> exit;
+	
+	$ sqlplus inv03/cihampelas9!
+	SQL> 
+	
+10. View Source Code 
+
+	$ sqlplus / as sysdba
+	SQL> select text
+	     from dba_source
+		 where name = 'ORA12C_VERIFY_FUNCTION'
+		 order by name, line;
+	
+11. Drop profile
+
+	$ sqlplus / as sysdba
+	SQL> drop profile inv_profile;
+	
+		ORA-02382: profile INV_PROFILE has users assigned, cannot drop without CASCADE
+		
+	SQL> drop profile inv_profile cascade;
+	
+	SQL> column username format a15
+	SQL> column profile format a10
+	SQL> select username, profile
+		 from dba_users
+		 where upper(username) like 'INV%';	
+		 
+		USERNAME        PROFILE
+		--------------- ----------
+		INV01           DEFAULT
+		inv02           DEFAULT
+		INV03           DEFAULT
+		 
+=== Managing Undo Data ===		 
+
+01. UNDO_RETENTION
+
+	09:00    Run Report
+	
+	
+	09:15    Update -> Commit
+	
+	10:00    Report Selesai	-> snapshot too old
+	
+	UNDO_RETENTION : 1 jam -> 3600 seconds
+		 
+02. Rollback
+
+	$ sqlplus inv03/cihampelas9!
+	SQL> select tname from tab;
+	SQL> create table emp30 as
+			 select employee_id, first_name, salary
+			 from hr.employees
+			 where department_id = 30
+			 order by salary DESC;	
+	SQL> select * from emp30;
+	
+		EMPLOYEE_ID FIRST_NAME               SALARY
+		----------- -------------------- ----------
+				114 Den                       11000
+				115 Alexander                  3100
+				116 Shelli                     2900
+				117 Sigal                      2800
+				118 Guy                        2600
+				119 Karen                      2500
+
+		6 rows selected.
+	
+	SQL> delete from emp30;
+		6 rows deleted.
+		
+	SQL> select * from emp30;
+		no rows selected
+		
+	SQL> rollback;
+	SQL> select * from emp30;
+		 
+		EMPLOYEE_ID FIRST_NAME               SALARY
+		----------- -------------------- ----------
+				114 Den                       11000
+				115 Alexander                  3100
+				116 Shelli                     2900
+				117 Sigal                      2800
+				118 Guy                        2600
+				119 Karen                      2500
+
+		6 rows selected.
+		 
+	SQL> update emp30
+           set salary = 7000;
+		   
+	SQL> select * from emp30;
+		EMPLOYEE_ID FIRST_NAME               SALARY
+		----------- -------------------- ----------
+				114 Den                        7000
+				115 Alexander                  7000
+				116 Shelli                     7000
+				117 Sigal                      7000
+				118 Guy                        7000
+				119 Karen                      7000
+
+		6 rows selected.
+		   
+	SQL> rollback;
+
+	SQL> select * from emp30;
+		 
+03. Read-consistent queries
+	- Buka 2 buah terminal
+	- Login sebagai user inv03
+	
+	Terminal 1:
+
+	$ sqlplus inv03/cihampelas9!
+	SQL> select * from emp30;
+	SQL> update emp30
+	      set FIRST_NAME = 'Bambang'
+	      where EMPLOYEE_ID = 114;
+	SQL> select * from emp30;	  
+	SQL> commit;
+	
+	Terminal 2:
+
+	$ sqlplus inv03/cihampelas9!
+	SQL> select * from emp30;	
+	
+		EMPLOYEE_ID FIRST_NAME               SALARY
+		----------- -------------------- ----------
+				114 Bambang                   11000
+				115 Alexander                  3100
+				116 Shelli                     2900
+				117 Sigal                      2800
+				118 Guy                        2600
+				119 Karen                      2500
+
+		6 rows selected.
+		 
+=== Managing Data Concurrency ===
+
+01. Lock 	 	 
+	- Buka 2 buah terminal
+	- Login sebagai user hr dan inv03	 
+		 
+	Terminal 1:
+
+	$ sqlplus hr/Welcome1
+	SQL> grant select, insert, update, delete
+         on regions to inv03;
+	SQL> select * from regions;
+	SQL> update regions
+		  set REGION_NAME = 'BDG'
+		  where REGION_ID = 4;
+	SQL> select * from regions;	  
+			 REGION_ID REGION_NAME
+			---------- -------------------------
+					 1 Europe
+					 2 Americas
+					 3 Asia
+					 4 BDG
+	SQL> commit;
+	
+	Terminal 2:
+
+	$ sqlplus inv03/cihampelas9!
+	SQL> alter user inv03 identified by Welcome1;		 
+	SQL> select * from hr.regions;	 
+	SQL> update hr.regions
+		  set REGION_NAME = 'SBY'
+		  where REGION_ID = 4;	
+	SQL> commit;
+	
+02. Lock Conflict
+	- Buka 3 buah terminal
+	- Login sebagai user hr, inv03, SYS	
+	
+	Terminal 1:
+
+	$ sqlplus hr/Welcome1
+	SQL> select * from regions;		
+	SQL> update regions
+		  set REGION_NAME = 'HONGKONG'
+		  where REGION_ID = 4;
+		  
+	Terminal 2:
+
+	$ sqlplus inv03/Welcome1
+	SQL> select * from hr.regions;		
+	SQL> update hr.regions
+		  set REGION_NAME = 'TOKYO'
+		  where REGION_ID = 4;
+		  
+	Terminal 3:
+
+	$ sqlplus / as sysdba
+	SQL> SELECT sid, serial#, username, machine, program
+		 FROM v$session 
+		 WHERE sid IN (SELECT blocking_session FROM v$session);
+		
+		   SID    SERIAL#
+	---------- ----------
+	USERNAME
+	--------------------------------------------------------------------------------
+	MACHINE
+	----------------------------------------------------------------
+	PROGRAM
+	------------------------------------------------
+		   149      26561
+	HR
+	vmserver.com
+	sqlplus@vmserver.com (TNS V1-V3)
+	
+	SQL> ALTER SYSTEM KILL SESSION '149,26561' immediate;
+
+03. Deadlocks
+	- Buka 2 buah terminal
+	- Login sebagai user hr dan inv03	 
+		 
+	Terminal 1:
+
+	$ sqlplus hr/Welcome1
+	SQL> select * from regions;		
+	SQL> update regions
+		  set REGION_NAME = 'ABC'
+		  where REGION_ID = 1;
+	SQL> select * from regions;	
+	SQL> update regions
+		  set REGION_NAME = 'XYZ'
+		  where REGION_ID = 2;
+
+		ORA-00060: deadlock detected while waiting for resource
+
+	SQL> commit;
+	SQL> select * from regions;	
+		 REGION_ID REGION_NAME
+		---------- -------------------------
+				 1 456
+				 2 123
+				 3 Asia
+				 4 TOKYO
+	
+	Terminal 2:
+
+	$ sqlplus inv03/Welcome1
+	SQL> select * from hr.regions;		
+	SQL> update hr.regions
+		  set REGION_NAME = '123'
+		  where REGION_ID = 2;	
+	SQL> select * from hr.regions;	
+	SQL> update hr.regions
+		  set REGION_NAME = '456'
+		  where REGION_ID = 1;		
+	
+	SQL> commit;
+	SQL> select * from hr.regions;	
+		 REGION_ID REGION_NAME
+		---------- -------------------------
+				 1 456
+				 2 123
+				 3 Asia
+				 4 TOKYO
