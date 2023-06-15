@@ -1,0 +1,324 @@
+=== Startup Oracle DB + Listener ===
+
+01. Startup DB
+
+	$ sqlplus sys/Welcome1 as sysdba
+	
+		Connected to an idle instance.
+		
+	SQL> startup;
+	
+		ORACLE instance started.
+
+		Total System Global Area 1048575776 bytes
+		Fixed Size                  8904480 bytes
+		Variable Size             268435456 bytes
+		Database Buffers          763363328 bytes
+		Redo Buffers                7872512 bytes
+		Database mounted.
+		Database opened.
+	
+	SQL> exit;
+	
+02. Startup Listener
+
+	$ lsnrctl start
+	
+=== Export / Import Data Pump : Tables ===
+
+--- Source Database
+
+01. Create Directory Object
+
+	$ mkdir /home/oracle/dmp_exp
+	
+	$ sqlplus / as sysdba
+	SQL> create directory dmp_exp_dir as '/home/oracle/dmp_exp';
+	SQL> grant read, write on directory dmp_exp_dir to hr;
+	SQL> exit
+	
+02. Export Tables
+
+	$ expdp hr/Welcome1 tables=EMPLOYEES,DEPARTMENTS 
+			directory=dmp_exp_dir
+			dumpfile=emp_dept.dmp logfile=emp_dept.log
+	
+		. . exported "HR"."EMPLOYEES"                            17.08 KB     107 rows
+		. . exported "HR"."DEPARTMENTS"                          7.125 KB      27 rows
+		Master table "HR"."SYS_EXPORT_TABLE_01" successfully loaded/unloaded
+		******************************************************************************
+		Dump file set for HR.SYS_EXPORT_TABLE_01 is:
+		  /home/oracle/dmp_exp/emp_dept.dmp
+		Job "HR"."SYS_EXPORT_TABLE_01" successfully completed at Fri Jun 9 09:24:55 2023 elapsed 0 00:00:19
+	
+03. Check hasilnya
+
+	$ ls -l -h /home/oracle/dmp_exp
+		-rw-r----- 1 oracle oinstall 316K Jun  9 09:24 emp_dept.dmp
+		-rw-r--r-- 1 oracle oinstall 1.6K Jun  9 09:24 emp_dept.log
+	
+	$ more /home/oracle/dmp_exp/emp_dept.log
+	
+--- Target Database	
+	
+01. Create User + Directory	
+	
+	$ mkdir /home/oracle/dmp_imp
+	
+	$ sqlplus / as sysdba
+	SQL> create user hr1
+	     identified by Welcome1
+		 default tablespace users
+		 temporary tablespace temp;
+		 
+	SQL> grant dba to hr1;
+	
+	SQL> create directory dmp_imp_dir as '/home/oracle/dmp_imp';
+	SQL> grant read, write on directory dmp_imp_dir to hr1;
+	SQL> exit	
+	
+02. Import Table
+
+	-- Simulasi memindahkan dmp file dari Source DB ke Target DB
+	$ cp /home/oracle/dmp_exp/emp_dept.dmp /home/oracle/dmp_imp
+	$ ls -l -h /home/oracle/dmp_imp
+		-rw-r----- 1 oracle oinstall 316K Jun  9 09:35 emp_dept.dmp
+		
+	-- Import dmp file
+	$ impdp hr1/Welcome1 REMAP_SCHEMA=HR:HR1
+		directory=dmp_imp_dir
+		dumpfile=emp_dept.dmp logfile=emp_dept.log
+
+		...
+		Processing object type TABLE_EXPORT/TABLE/TABLE_DATA
+		. . imported "HR1"."EMPLOYEES"                           17.08 KB     107 rows
+		. . imported "HR1"."DEPARTMENTS"                         7.125 KB      27 rows
+		...
+	
+03. Check hasilnya
+
+	$ sqlplus hr1/Welcome1
+	SQL> select tname from tab;
+	SQL> select count(*) from employees;
+	SQL> select count(*) from departments;
+	
+	
+=== Export / Import Data Pump : Schemas ===
+
+--- Source Database
+	
+01. Export Schemas
+
+	$ expdp hr/Welcome1 schemas=HR
+			directory=dmp_exp_dir
+			dumpfile=HR.dmp logfile=HR.log	
+
+		. . exported "HR"."EMPLOYEES"                            17.08 KB     107 rows
+		. . exported "HR"."LOCATIONS"                            8.437 KB      23 rows
+		. . exported "HR"."JOB_HISTORY"                          7.195 KB      10 rows
+		. . exported "HR"."JOBS"                                 7.109 KB      19 rows
+		. . exported "HR"."DEPARTMENTS"                          7.125 KB      27 rows
+		. . exported "HR"."COUNTRIES"                            6.367 KB      25 rows
+		. . exported "HR"."REGIONS"                              5.523 KB       4 rows
+		Master table "HR"."SYS_EXPORT_SCHEMA_01" successfully loaded/unloaded
+		******************************************************************************
+		Dump file set for HR.SYS_EXPORT_SCHEMA_01 is:
+		  /home/oracle/dmp_exp/HR.dmp
+		Job "HR"."SYS_EXPORT_SCHEMA_01" successfully completed at Fri Jun 9 09:46:44 2023 elapsed 0 00:00:47
+	
+02. Check hasilnya
+
+	$ ls -l -h /home/oracle/dmp_exp
+		-rw-r----- 1 oracle oinstall 316K Jun  9 09:24 HR.dmp
+		-rw-r--r-- 1 oracle oinstall 1.6K Jun  9 09:24 HR.log
+	
+	$ more /home/oracle/dmp_exp/HR.log	
+	
+--- Target Database	
+	
+01. Create User 
+	
+	$ sqlplus / as sysdba
+	SQL> create user hr2
+	     identified by Welcome1
+		 default tablespace users
+		 temporary tablespace temp;
+		 
+	SQL> grant dba to hr2;
+	SQL> grant read, write on directory dmp_imp_dir to hr2;
+	SQL> exit	
+	
+02. Import Schema
+
+	-- Simulasi memindahkan dmp file dari Source DB ke Target DB
+	$ cp /home/oracle/dmp_exp/HR.dmp /home/oracle/dmp_imp
+	$ ls -l -h /home/oracle/dmp_imp
+		-rw-r----- 1 oracle oinstall 316K Jun  9 09:35 HR.dmp
+		
+	-- Import dmp file
+	$ impdp hr2/Welcome1 REMAP_SCHEMA=HR:HR2
+		directory=dmp_imp_dir
+		dumpfile=HR.dmp logfile=HR.log
+
+		...
+		Processing object type SCHEMA_EXPORT/TABLE/TABLE_DATA
+		. . imported "HR2"."EMPLOYEES"                           17.08 KB     107 rows
+		. . imported "HR2"."LOCATIONS"                           8.437 KB      23 rows
+		. . imported "HR2"."JOB_HISTORY"                         7.195 KB      10 rows
+		. . imported "HR2"."JOBS"                                7.109 KB      19 rows
+		. . imported "HR2"."DEPARTMENTS"                         7.125 KB      27 rows
+		. . imported "HR2"."COUNTRIES"                           6.367 KB      25 rows
+		. . imported "HR2"."REGIONS"                             5.523 KB       4 rows
+		Processing object type SCHEMA_EXPORT/TABLE/GRANT/OWNER_GRANT/OBJECT_GRANT
+		...
+	
+03. Check hasilnya
+
+	$ sqldeveloper
+	
+	Buat koneksi sebagai user HR2, check object
+	- Tables
+	- Views
+	- Sequence
+	- Procedure
+	
+
+=== SQL Loader ===
+
+01. Buat input data files : 
+
+	$ cd ~
+	$ mkdir sqlloader
+	$ cd sqlloader
+	$ nano emails.dat
+	
+		1,badu@microsoft.com
+		2,tini@oracle.com
+		3,fulan@ibm.com
+
+	$ cat emails.dat
+
+02. Buat control files : 
+
+	$ cd ~/sqlloader
+	$ nano emails.ctl
+	
+	load data into table emails
+	insert
+	fields terminated by ","
+	(
+		email_id,
+		email
+	)
+	
+	$ cat emails.ctl
+	
+03. Membuat table emails
+
+	$ sqlplus hr/Welcome1
+	SQL> create table emails(
+			email_id number primary key,
+			email varchar2(40) not null
+		);
+
+04. Membuat parfile (optional)
+
+	$ nano ~/sqlloader/emails.par
+	
+	userid=hr
+	control=emails.ctl
+	log=emails.log
+	bad=emails.bad
+	data=emails.dat
+	direct=true
+
+	$ cat ~/sqlloader/emails.par
+
+05. Run SQL Loader
+
+	$ cd ~/sqlloader
+	$ ls 
+	$ sqlldr parfile=emails.par
+
+		...
+		Table EMAILS:
+		  3 Rows successfully loaded.
+		...
+		
+06. Test
+
+	$ sqlplus hr/Welcome1
+	SQL> select * from emails;
+	
+		  EMAIL_ID EMAIL
+		---------- ----------------------------------------
+				 1 badu@microsoft.com
+				 2 tini@oracle.com
+				 3 fulan@ibm.com
+	
+=== External Tables ===
+
+01. Copy languages.csv ke ~/ext_tab
+
+	$ mkdir ~/ext_tab
+
+	copy menggunakan MobaXTerm
+	
+	$ cat ~/ext_tab/languages.csv
+
+02. Create Directory Object
+	
+	$ sqlplus / as sysdba
+	SQL> create directory ext_tab_dir as '~/ext_tab';
+	SQL> grant read, write on directory ext_tab_dir to hr;
+	SQL> exit	
+	
+03. Create External Table
+
+	$ sqlplus hr/Welcome1
+	SQL> create table languages(
+			language_id int,
+			language_name varchar2(30)
+		 )
+		 organization external (
+			type oracle_loader
+			default directory ext_tab_dir
+			access parameters
+			 (fields terminated by ',')
+			 location('languages.csv')				
+		 ); 
+
+04. Test
+
+	$ sqlplus hr/Welcome1
+	SQL> select * from languages;	
+
+		LANGUAGE_ID LANGUAGE_NAME
+		----------- ------------------------------
+				  1 Acholi
+				  2 Afrikaans
+				  3 Akan
+				  4 Albanian
+		...
+
+	SQL> select * from languages
+	     where language_name like 'Be%';	
+
+	SQL> create table bahasa as 
+			select * from languages
+			where language_name like 'Be%';		
+			
+	SQL> select * from bahasa;
+
+		LANGUAGE_ID LANGUAGE_NAME
+		----------- ------------------------------
+				 14 Behdini
+				 15 Belorussian
+				 16 Bengali
+				 17 Berber
+
+
+
+	
+	
+	
